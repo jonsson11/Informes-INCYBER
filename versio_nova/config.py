@@ -61,3 +61,34 @@ MODULE_TO_CATEGORY = {
     "advanced anti-exploit": "Malware",
     "blocklist": "Malware",
 }
+
+# --------------------------------------------------
+# API ZABBIX
+# --------------------------------------------------
+# Zabbix 7.4 -> autenticación por API Token fijo (header Authorization: Bearer)
+# Se crea desde: Administración > Usuarios > (tu usuario) > Tokens API
+
+ZABBIX_API_HOST = "https://watch.incyber.es/api_jsonrpc.php"  # <-- ajustar URL real
+ZABBIX_API_TOKEN = "e9735c83c24fc256232d6aca7919de90ebb7d2f57fa818123f959797755bd8e0"  # <-- ajustar token real
+
+# Mapeo empresa (nombre en BitDefender) -> nombre del Host Group en Zabbix.
+# Solo las empresas que aparecen aquí tendrán sección de Zabbix en el PDF.
+# Las que coincidan de nombre exacto se mapean 1:1; las que no, con su
+# nombre real en Zabbix (ej. GSP PORCSA -> "GSP").
+COMPANY_TO_ZABBIX_GROUP = {
+    "ACTIUM": "ACTIUM",
+    "CELEVANT": "CELEVANT",
+    "GSP PORCSA": "GSP",
+    "MEAT CENTER": "MEAT CENTER",
+    "SIEF2": "SIEF2",
+}
+
+# Severidades de Zabbix (problem.get -> campo "severity")
+ZABBIX_SEVERITY_MAP = {
+    "0": "No clasificado",
+    "1": "Información",
+    "2": "Advertencia",
+    "3": "Media",
+    "4": "Alta",
+    "5": "Desastre",
+}
