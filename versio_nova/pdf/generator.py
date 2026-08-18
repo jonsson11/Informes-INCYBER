@@ -27,8 +27,7 @@ def _wrap_text(pdf, text, max_width):
     return lines or [""]
 
 
-def generate_pdf(company,stats,period_label,period_start=None,):
-
+def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,zabbix_problems=None,):
     pdf = PDF()
     pdf.set_auto_page_break(auto=True,margin=15)
     period_str = period_label
@@ -590,8 +589,126 @@ def generate_pdf(company,stats,period_label,period_start=None,):
         _flush_t10_seps()
         pdf.set_y(pdf.get_y())
 
+    # ─────────────────────────────────────────────
+    # SECCION: INCIDENCIAS ZABBIX (solo si la empresa tiene Zabbix)
+    # ─────────────────────────────────────────────
+    if has_zabbix:
+        zabbix_problems = zabbix_problems or []
 
-    
+        title_h_z = 15
+        header_h_z = 11
+        row_h_z = 11
+        rows_h_z = row_h_z if not zabbix_problems else len(zabbix_problems) * row_h_z
+        required_h_z = title_h_z + header_h_z + rows_h_z
+
+        if pdf.get_y() + required_h_z > pdf.page_break_trigger:
+            pdf.add_page()
+
+        pdf.set_text_color(*C_DARK)
+        pdf.set_font("helvetica", "B", 18)
+        pdf.cell(0, 15,
+            "Incidencias Zabbix (En Tratamiento)", new_x=XPos.LMARGIN, new_y=YPos.NEXT,)
+
+        pdf.ln(3)
+        start_x = pdf.get_x()
+
+        def _draw_zabbix_header():
+            pdf.set_x(start_x)
+            pdf.set_fill_color(*C_RED)
+            pdf.set_text_color(*C_WHITE)
+            pdf.set_font("helvetica", "B", 10)
+            pdf.cell(15, 11, "#", border=0, fill=True, align="C")
+            pdf.cell(40, 11, "Host", border=0, fill=True)
+            pdf.cell(65, 11, "Problema", border=0, fill=True)
+            pdf.cell(20, 11, "Ocurr.", border=0, fill=True, align="C")
+            pdf.cell(25, 11, "Severidad", border=0, fill=True, align="C")
+            pdf.cell(25, 11, "Última detección", border=0, fill=True, align="C",
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT,)
+
+        _draw_zabbix_header()
+
+        pdf.set_draw_color(226, 232, 240)
+        pdf.set_line_width(0.1)
+
+        if not zabbix_problems:
+            row_h_e = 11
+            y0 = pdf.get_y()
+            pdf.set_fill_color(*C_WHITE)
+            pdf.rect(start_x, y0, 190, row_h_e, "F")
+            pdf.set_text_color(*C_GRAY)
+            pdf.set_font("helvetica", "I", 9)
+            pdf.set_xy(start_x, y0 + 3)
+            pdf.cell(190, 5, "Sin incidencias suprimidas/reconocidas en el periodo.", align="C",)
+            pdf.set_draw_color(226, 232, 240)
+            pdf.set_line_width(0.4)
+            pdf.line(start_x, y0 + row_h_e, start_x + 190, y0 + row_h_e)
+            pdf.ln(row_h_e)
+        else:
+            alt = False
+            sep_ys = []
+
+            def _flush_z_seps():
+                pdf.set_draw_color(0, 0, 0)
+                pdf.set_line_width(0.1)
+                for sy in sep_ys:
+                    pdf.line(start_x, sy, start_x + 190, sy)
+                sep_ys.clear()
+
+            for i, p in enumerate(zabbix_problems):
+                pos = i + 1
+
+                if pdf.get_y() + row_h_z > pdf.page_break_trigger:
+                    _flush_z_seps()
+                    pdf.add_page()
+                    _draw_zabbix_header()
+                    alt = False
+
+                y0 = pdf.get_y()
+                pdf.set_fill_color((241, 245, 249) if alt else C_WHITE)
+                pdf.rect(start_x, y0, 190, row_h_z, "F")
+
+                # Badge redondo con el numero de fila, igual que en Cuarentena/Top10
+                badge_cx = start_x + 7.5
+                badge_cy = y0 + row_h_z / 2
+                badge_r = 3.6
+                pdf.set_draw_color(203, 213, 225)
+                pdf.set_line_width(0.25)
+                pdf.ellipse(badge_cx - badge_r, badge_cy - badge_r, badge_r * 2, badge_r * 2, "D")
+
+                pdf.set_text_color(*C_GRAY)
+                pdf.set_font("helvetica", "B", 8)
+                pdf.set_xy(start_x, badge_cy - 2.3)
+                pdf.cell(15, 4.6, str(pos), align="C")
+
+                pdf.set_text_color(*C_TEXT)
+                pdf.set_font("helvetica", "", 8)
+                text_y = y0 + (row_h_z - 5) / 2
+
+                pdf.set_xy(start_x + 15, text_y)
+                pdf.cell(40, 5, str(p["host"])[:24])
+
+                pdf.set_xy(start_x + 55, text_y)
+                pdf.cell(65, 5, str(p["name"])[:44])
+
+                pdf.set_font("helvetica", "B", 8)
+                pdf.set_xy(start_x + 120, text_y)
+                pdf.cell(20, 5, str(p["occurrences"]), align="C")
+
+                pdf.set_font("helvetica", "", 8)
+                pdf.set_xy(start_x + 140, text_y)
+                pdf.cell(25, 5, str(p["severity"]), align="C")
+
+                fecha_str = p["date"].strftime("%d/%m/%y") if p.get("date") else "N/D"
+                pdf.set_xy(start_x + 165, text_y)
+                pdf.cell(25, 5, fecha_str, align="C")
+
+                sep_ys.append(y0 + row_h_z)
+                pdf.set_xy(start_x, y0 + row_h_z)
+                alt = not alt
+
+            _flush_z_seps()
+            pdf.set_y(pdf.get_y())
+
     if period_start:
         mmaa = period_start.strftime("%m%y")
     else:

@@ -1,12 +1,14 @@
 import argparse
 import time
 
-from config import (BD_REPORT_INTERVAL,EXCLUDED_COMPANIES,)
+from config import (BD_REPORT_INTERVAL, EXCLUDED_COMPANIES, COMPANY_TO_ZABBIX_GROUP,)
 from api.bitdefender import api_call
-from reports.security_audit import (fetch_security_audit_events,)
-from reports.endpoint_status import (fetch_endpoint_protection_status,)
-from reports.malware_status import (fetch_malware_status_actions,)
+from api.reports_batch import create_reports, wait_and_download_reports
+from reports.security_audit import (build_security_audit_report_params, parse_security_audit_zip,)
+from reports.endpoint_status import (build_endpoint_status_report_params, parse_endpoint_status_zip,)
+from reports.malware_status import (build_malware_status_report_params, parse_malware_status_zip,)
 from reports.quarantine import (fetch_quarantine_items,)
+from reports.zabbix_problems import fetch_suppressed_acknowledged_problems
 from services.statistics import (compute_stats,)
 from pdf.generator import (generate_pdf,)
 from services.period import get_period_from_interval
@@ -62,15 +64,40 @@ def process_company(cid, cname):
     endpoints_raw = get_all_endpoints(cid)
     equipos_reales = [e for e in endpoints_raw if e.get("machineType") in (1, 2)]
     managed_total = len(equipos_reales)
-    status_summary = (fetch_endpoint_protection_status(cid))
-    active_total = (status_summary.get("online",0))
-    (events,csv_start,csv_end,) = fetch_security_audit_events(cid)
+
+    # --------------------------------------------------
+    # Pedimos los 3 informes de BitDefender A LA VEZ y esperamos a los
+    # 3 de forma entrelazada (una sola espera compartida), en vez de
+    # crear+esperar+descargar cada uno por separado, uno detras de otro.
+    # --------------------------------------------------
+    report_specs = {
+        "endpoint_status": build_endpoint_status_report_params(cid),
+        "security_audit": build_security_audit_report_params(cid),
+        "malware_status": build_malware_status_report_params(cid),
+    }
+    report_ids = create_reports(report_specs)
+    zips = wait_and_download_reports(report_ids)
+
+    status_summary = parse_endpoint_status_zip(zips.get("endpoint_status"))
+    active_total = status_summary.get("online", 0)
+
+    events, _csv_start_ignored, _csv_end_ignored = parse_security_audit_zip(zips.get("security_audit"))
+
     csv_start, csv_end = get_period_from_interval(BD_REPORT_INTERVAL)
     period_label = f"{csv_start.strftime('%d/%m/%Y')} - {csv_end.strftime('%d/%m/%Y')}"
-    malware_actions = fetch_malware_status_actions(cid)
+
+    malware_actions = parse_malware_status_zip(zips.get("malware_status"))
     quarantine_items = fetch_quarantine_items(cid, start_date=csv_start, end_date=csv_end)
-    stats = compute_stats(equipos_reales,managed_total,active_total,events,malware_actions,quarantine_items,)
-    out = generate_pdf(cname,stats,period_label,period_start=csv_start,)
+
+    stats = compute_stats(equipos_reales, managed_total, active_total, events, malware_actions, quarantine_items,)
+
+    has_zabbix = cname in COMPANY_TO_ZABBIX_GROUP
+    zabbix_problems = (
+        fetch_suppressed_acknowledged_problems(cname, time_from=csv_start, time_till=csv_end)
+        if has_zabbix else []
+    )
+
+    out = generate_pdf(cname, stats, period_label, period_start=csv_start, has_zabbix=has_zabbix, zabbix_problems=zabbix_problems,)
     return out
 
 
@@ -100,7 +127,7 @@ def main():
 
     if not companies:
         raise RuntimeError("No se ha encontrado ninguna empresa en la cuenta de BitDefender.")
-    
+
     print(f"  [i] Se han encontrado {len(companies)} empresas.\n")
 
     ok, fail = 0, 0
