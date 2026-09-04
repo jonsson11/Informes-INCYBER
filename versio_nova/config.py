@@ -15,8 +15,10 @@ import sys
 # 8 - THIS YEAR
 # 9 - LAST YEAR
 # --------------------------------------------------
+# python main.py {-E nombreEmpresa}
+# --------------------------------------------------
 
-BD_REPORT_INTERVAL = 4
+BD_REPORT_INTERVAL = 5
 
 BASE_PATH = os.path.dirname(os.path.abspath(sys.argv[0]))
 ASSETS_PATH = os.path.join(BASE_PATH, "assets")
