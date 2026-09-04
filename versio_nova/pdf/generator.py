@@ -597,8 +597,17 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
 
         title_h_z = 15
         header_h_z = 11
-        row_h_z = 11
-        rows_h_z = row_h_z if not zabbix_problems else len(zabbix_problems) * row_h_z
+        problema_w_z = 51  # ancho util de la columna "Problema" para el wrap
+        line_h_z = 4.2
+
+        pdf.set_font("helvetica", "", 8)
+        _z_lines_cache = [
+            _wrap_text(pdf, str(p["name"]), problema_w_z) for p in zabbix_problems
+        ]
+        _z_row_heights = [
+            max(11, line_h_z * len(lines) + 6) for lines in _z_lines_cache
+        ]
+        rows_h_z = sum(_z_row_heights) if _z_row_heights else 11
         required_h_z = title_h_z + header_h_z + rows_h_z
 
         if pdf.get_y() + required_h_z > pdf.page_break_trigger:
@@ -612,17 +621,20 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
         pdf.ln(3)
         start_x = pdf.get_x()
 
+        C_GREEN = (22, 163, 74)
+
         def _draw_zabbix_header():
             pdf.set_x(start_x)
             pdf.set_fill_color(*C_RED)
             pdf.set_text_color(*C_WHITE)
             pdf.set_font("helvetica", "B", 10)
-            pdf.cell(15, 11, "#", border=0, fill=True, align="C")
-            pdf.cell(40, 11, "Host", border=0, fill=True)
-            pdf.cell(65, 11, "Problema", border=0, fill=True)
-            pdf.cell(20, 11, "Ocurr.", border=0, fill=True, align="C")
-            pdf.cell(25, 11, "Severidad", border=0, fill=True, align="C")
-            pdf.cell(25, 11, "Última detección", border=0, fill=True, align="C",
+            pdf.cell(12, 11, "#", border=0, fill=True, align="C")
+            pdf.cell(33, 11, "Host", border=0, fill=True)
+            pdf.cell(53, 11, "Problema", border=0, fill=True)
+            pdf.cell(16, 11, "Ocurr.", border=0, fill=True, align="C")
+            pdf.cell(23, 11, "Severidad", border=0, fill=True, align="C")
+            pdf.cell(23, 11, "Estado", border=0, fill=True, align="C")
+            pdf.cell(30, 11, "Última detección", border=0, fill=True, align="C",
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT,)
 
         _draw_zabbix_header()
@@ -646,6 +658,12 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
         else:
             alt = False
             sep_ys = []
+            col_host_x = start_x + 12
+            col_problema_x = col_host_x + 33
+            col_ocurr_x = col_problema_x + 53
+            col_sev_x = col_ocurr_x + 16
+            col_estado_x = col_sev_x + 23
+            col_fecha_x = col_estado_x + 23
 
             def _flush_z_seps():
                 pdf.set_draw_color(0, 0, 0)
@@ -656,6 +674,8 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
 
             for i, p in enumerate(zabbix_problems):
                 pos = i + 1
+                name_lines = _z_lines_cache[i]
+                row_h_z = _z_row_heights[i]
 
                 if pdf.get_y() + row_h_z > pdf.page_break_trigger:
                     _flush_z_seps()
@@ -668,9 +688,9 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
                 pdf.rect(start_x, y0, 190, row_h_z, "F")
 
                 # Badge redondo con el numero de fila, igual que en Cuarentena/Top10
-                badge_cx = start_x + 7.5
+                badge_cx = start_x + 6
                 badge_cy = y0 + row_h_z / 2
-                badge_r = 3.6
+                badge_r = 3.4
                 pdf.set_draw_color(203, 213, 225)
                 pdf.set_line_width(0.25)
                 pdf.ellipse(badge_cx - badge_r, badge_cy - badge_r, badge_r * 2, badge_r * 2, "D")
@@ -678,29 +698,42 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
                 pdf.set_text_color(*C_GRAY)
                 pdf.set_font("helvetica", "B", 8)
                 pdf.set_xy(start_x, badge_cy - 2.3)
-                pdf.cell(15, 4.6, str(pos), align="C")
+                pdf.cell(12, 4.6, str(pos), align="C")
+
+                text_y = y0 + (row_h_z - 5) / 2
 
                 pdf.set_text_color(*C_TEXT)
                 pdf.set_font("helvetica", "", 8)
-                text_y = y0 + (row_h_z - 5) / 2
+                pdf.set_xy(col_host_x, text_y)
+                pdf.cell(33, 5, str(p["host"])[:20])
 
-                pdf.set_xy(start_x + 15, text_y)
-                pdf.cell(40, 5, str(p["host"])[:24])
-
-                pdf.set_xy(start_x + 55, text_y)
-                pdf.cell(65, 5, str(p["name"])[:44])
+                # "Problema" en varias lineas, centrado verticalmente segun
+                # cuantas lineas ocupe (igual que la columna "Ruta" en Cuarentena)
+                name_y0 = y0 + (row_h_z - line_h_z * len(name_lines)) / 2
+                for li, line in enumerate(name_lines):
+                    pdf.set_xy(col_problema_x, name_y0 + li * line_h_z)
+                    pdf.cell(53, line_h_z, line)
 
                 pdf.set_font("helvetica", "B", 8)
-                pdf.set_xy(start_x + 120, text_y)
-                pdf.cell(20, 5, str(p["occurrences"]), align="C")
+                pdf.set_xy(col_ocurr_x, text_y)
+                pdf.cell(16, 5, str(p["occurrences"]), align="C")
 
                 pdf.set_font("helvetica", "", 8)
-                pdf.set_xy(start_x + 140, text_y)
-                pdf.cell(25, 5, str(p["severity"]), align="C")
+                pdf.set_xy(col_sev_x, text_y)
+                pdf.cell(23, 5, str(p["severity"]), align="C")
 
+                resolved = p.get("resolved", False)
+                estado_str = "RESUELTO" if resolved else "ACTIVO"
+                pdf.set_text_color(*C_GREEN if resolved else C_RED)
+                pdf.set_font("helvetica", "B", 7.5)
+                pdf.set_xy(col_estado_x, text_y)
+                pdf.cell(23, 5, estado_str, align="C")
+
+                pdf.set_text_color(*C_TEXT)
+                pdf.set_font("helvetica", "", 8)
                 fecha_str = p["date"].strftime("%d/%m/%y") if p.get("date") else "N/D"
-                pdf.set_xy(start_x + 165, text_y)
-                pdf.cell(25, 5, fecha_str, align="C")
+                pdf.set_xy(col_fecha_x, text_y)
+                pdf.cell(30, 5, fecha_str, align="C")
 
                 sep_ys.append(y0 + row_h_z)
                 pdf.set_xy(start_x, y0 + row_h_z)
