@@ -1,14 +1,14 @@
 import os
 import re
 from datetime import datetime
-from PIL import Image
 from fpdf.enums import XPos, YPos
-from fpdf.pattern import LinearGradient, RadialGradient
-from config import (BASE_PATH,OUTPUT_DIR,logo_portada,icon_portada,
+from config import (OUTPUT_DIR,logo_portada,pictogram_watermark,
     icon_windows,icon_linux,icon_macos,icon_server,
     icon_managed,icon_active,icon_shield,
     icon_physical,icon_virtual,)
-from pdf.pdf_base import (PDF,C_DARK,C_DARK2,C_RED,C_RED2,C_GRAY,C_LIGHT,C_WHITE,C_TEXT,C_MUTED,C_NAVY,THREAT_COLORS,)
+from pdf.pdf_base import (PDF,C_NAVY,C_NAVY_LIGHT,C_MAGENTA,C_MAGENTA_DARK,C_MAGENTA_TINT,
+    C_YELLOW,C_GREEN,C_GRAY,C_MUTED,C_BORDER,C_LIGHT,C_LIGHT_ROW,C_WHITE,C_TEXT,
+    C_DARK,C_DARK2,C_RED,C_RED2,THREAT_COLORS,)
 from pdf.components import (kpi_card,section_card,)
 
 
@@ -39,143 +39,74 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
     pdf.add_page()
     W, H = 210, 297
 
-    # Fondo con degradado diagonal sutil
-    grad_bg = LinearGradient(0,0,W,H,colors=[C_DARK,C_DARK2])
-    with pdf.use_pattern(grad_bg):
-        pdf.rect(0,0,W,H,style="F")
+    # Desactivamos temporalmente el salto de pagina automatico: la
+    # portada usa posicionamiento absoluto y no debe generar una
+    # pagina en blanco extra si alguna celda roza el margen inferior.
+    pdf.set_auto_page_break(auto=False)
 
-    # Patron de fondo: lineas diagonales finas, muy sutiles
-    pdf.set_draw_color(255,255,255)
-    with pdf.local_context(stroke_opacity=0.035):
-        pdf.set_line_width(0.3)
-        step = 14
-        for i in range(-int(H / step),int(W / step) + 1):
-            x0 = i * step
-            pdf.line(x0,0,x0 + H,H)
+    # Fondo solido azul marino (identidad Incyber), sin degradados ni
+    # resplandores: portada "corporativa oscura" aprobada en las maquetas.
+    pdf.set_fill_color(*C_NAVY)
+    pdf.rect(0,0,W,H,style="F")
 
-    # Resplandor radial rojo centrado en el bloque de titulo
-    glow = RadialGradient(W / 2,100,0,W / 2,100,75,colors=[C_RED,C_DARK])
-    with pdf.local_context(fill_opacity=0.35):
-        with pdf.use_pattern(glow):
-            pdf.rect(0,20,W,170,style="F")
+    # Pictograma del laberinto como marca de agua muy sutil, esquina
+    # inferior derecha (recorta fuera del margen, igual que la maqueta).
+    if os.path.exists(pictogram_watermark):
+        wm_w = 150
+        wm_x = W + 35 - wm_w
+        wm_y = H + 35 - wm_w
+        with pdf.local_context(fill_opacity=0.05):
+            pdf.image(pictogram_watermark,x=wm_x,y=wm_y,w=wm_w)
 
-    # Segundo resplandor, mas tenue, centrado en el area de la etiqueta de periodo
-    glow2 = RadialGradient(W / 2,145,0,W / 2,145,75,colors=[C_RED,C_DARK])
-    with pdf.local_context(fill_opacity=0.15):
-        with pdf.use_pattern(glow2):
-            pdf.rect(0,20,W,170,style="F")
-
-    # Barra superior e inferior con degradado
-    grad_top = LinearGradient(0,0,W,0,colors=[C_RED2,C_RED,C_RED2])
-    with pdf.use_pattern(grad_top):
-        pdf.rect(0,0,W,4,style="F")
-    with pdf.use_pattern(grad_top):
-        pdf.rect(0,H - 3,W,3,style="F")
-
-    # Cunas triangulares decorativas en las esquinas
-    pdf.set_fill_color(*C_RED)
-    with pdf.local_context(fill_opacity=0.55):
-        pdf.polygon([(0,4),(55,4),(0,45)],style="F")
-    with pdf.local_context(fill_opacity=0.45):
-        pdf.polygon([(W,H - 3),(W - 70,H - 3),(W,H - 50)],style="F")
-
-    # Detalles tipo "circuito" (linea + nodo) en las esquinas
-    pdf.set_draw_color(*C_RED)
-    with pdf.local_context(stroke_opacity=0.5):
-        pdf.set_line_width(0.4)
-        pdf.line(20,30,20,8)
-        pdf.line(20,8,45,8)
-    with pdf.local_context(fill_opacity=0.8):
-        pdf.set_fill_color(*C_RED)
-        pdf.circle(45,8,1.2,style="F")
-
-    pdf.set_draw_color(*C_RED)
-    with pdf.local_context(stroke_opacity=0.8):
-        pdf.line(190,261,190,289)
-        pdf.line(190,289,165,289)
-    with pdf.local_context(fill_opacity=0.8):
-        pdf.set_fill_color(*C_RED)
-        pdf.circle(165,289,1.2,style="F")
-
-    # Logo arriba a la derecha, con pequenos margenes
-    logo_w = 50
-    margin_top = 10
-    margin_right = 6
-    logo_x = W - margin_right - logo_w
+    # Logo Incyber (version blanca de marca) arriba a la izquierda
+    logo_w = 46
+    margin_top = 16
+    margin_left = 16
     if os.path.exists(logo_portada):
-        pdf.image(logo_portada,x=logo_x,y=margin_top,w=logo_w)
+        pdf.image(logo_portada,x=margin_left,y=margin_top,w=logo_w)
 
-    # Icono decorativo a la izquierda del logo, con la misma altura
-    if os.path.exists(logo_portada):
-        with Image.open(logo_portada) as _im:
-            logo_h_mm = logo_w * (_im.height / _im.width)
-    else:
-        logo_h_mm = logo_w * (332 / 1200)
-    icon_gap = 4
-    icon_w = logo_h_mm
-    if os.path.exists(icon_portada):
-        pdf.image(icon_portada,x=logo_x - icon_gap - icon_w,y=margin_top,w=icon_w,h=logo_h_mm)
+    # Filete magenta + kicker + nombre de empresa, bloque de titulo
+    block_x = margin_left
+    block_w = W - 2 * margin_left
+    pdf.set_fill_color(*C_MAGENTA)
+    pdf.rect(block_x, 148, 17, 1.6, "F")
 
-    # Titulo de dos pesos: "INFORME DE" fino + "CIBERSEGURIDAD" grueso
-    pdf.set_y(95)
-    pdf.set_font("helvetica","",20)
-    pdf.set_text_color(*C_MUTED)
-    pdf.cell(0,10,"INFORME DE",align="C",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+    pdf.set_xy(block_x, 154)
+    pdf.set_font("helvetica","B",13.5)
+    pdf.set_text_color(*C_MAGENTA)
+    pdf.multi_cell(block_w,7,"INFORME MENSUAL DE CIBERSEGURIDAD",align="L",)
 
-    pdf.set_font("helvetica","B",34)
+    pdf.set_x(block_x)
+    pdf.set_font("helvetica","B",27)
     pdf.set_text_color(*C_WHITE)
-    pdf.cell(0,14,"CIBERSEGURIDAD",align="C",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+    pdf.multi_cell(block_w,11,company.upper(),align="L",)
 
-    # Linea corta con degradado bajo el titulo
-    grad_line = LinearGradient(75,0,135,0,colors=[C_DARK,C_RED,C_DARK])
-    with pdf.use_pattern(grad_line):
-        pdf.rect(75,125,60,0.6,style="F")
-
-    pdf.set_y(132)
+    pdf.ln(2)
+    pdf.set_x(block_x)
     pdf.set_font("helvetica","",11.5)
+    pdf.set_text_color(200,204,224)
+    pdf.cell(block_w,7,f"Periodo del informe \u2014 {period_str}",align="L",)
+
+    # Linea de pie + metadatos, igual que en la maqueta aprobada
+    footer_y = H - 24
+    pdf.set_draw_color(59,72,128)
+    pdf.set_line_width(0.25)
+    pdf.line(margin_left, footer_y, W - margin_left, footer_y)
+
+    pdf.set_xy(margin_left, footer_y + 4)
+    pdf.set_font("helvetica","",8.5)
     pdf.set_text_color(*C_MUTED)
-    pdf.cell(0,9,"Resumen ejecutivo y detalle de infecciones",align="C",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+    pdf.cell(block_w / 2,6,f"Generado automaticamente el {datetime.now().strftime('%d/%m/%Y')}",align="L",)
 
-    # Etiqueta "pill" con el periodo del informe, justo debajo del subtitulo
-    pill_text = f"PERIODO: {period_str}"
+    pdf.set_xy(margin_left + block_w / 2, footer_y + 4)
     pdf.set_font("helvetica","B",8.5)
-    pill_w = pdf.get_string_width(pill_text) + 14
-    pill_x = (W - pill_w) / 2
-    pill_y = 146
-    pdf.set_draw_color(*C_RED)
-    with pdf.local_context(stroke_opacity=0.7):
-        pdf.set_line_width(0.4)
-        pdf.rect(pill_x,pill_y,pill_w,7,style="D",round_corners=True,corner_radius=3.5)
-    pdf.set_text_color(*C_RED)
-    pdf.set_xy(pill_x,pill_y + 1.3)
-    pdf.cell(pill_w,4.5,pill_text,align="C")
-
-    # Tarjeta de datos con degradado propio y filo superior rojo
-    card_x,card_y,card_w,card_h = 50,215,110,40
-    grad_card = LinearGradient(card_x,card_y,card_x,card_y + card_h,colors=[(26,38,66),(18,27,48)])
-    with pdf.use_pattern(grad_card):
-        pdf.rect(card_x,card_y,card_w,card_h,style="F",round_corners=True,corner_radius=2)
-    pdf.set_fill_color(*C_RED)
-    pdf.rect(card_x,card_y,card_w,1.2,style="F")
-
-    pdf.set_y(card_y + 6)
-    for bold_txt, val_txt in [
-        ("EMPRESA:", company),(
-            "FECHA INFORME:",datetime.now().strftime("%d/%m/%Y")),(
-            "PREPARADO POR:","INCYBER TECHNOLOGIES S.L."),
-    ]:
-
-        pdf.set_x(card_x + 10)
-        pdf.set_font("helvetica","B",9)
-        pdf.set_text_color(*C_WHITE)
-        pdf.cell(42,9,bold_txt)
-        pdf.set_font("helvetica","",9)
-        pdf.set_text_color(*C_MUTED)
-        pdf.cell(50,9,val_txt,new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+    pdf.set_text_color(*C_MUTED)
+    pdf.cell(block_w / 2,6,"CONFIDENCIAL \u2014 USO INTERNO",align="R",)
 
     # ─────────────────────────────────────────────
     # PAGINA 2
     # ─────────────────────────────────────────────
+    pdf.set_auto_page_break(auto=True,margin=15)
     pdf.add_page()
     pdf.set_text_color(*C_DARK)
     pdf.set_font("helvetica","B",18)
@@ -297,12 +228,19 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
     section_card(pdf,15, 199,180, 44,
         "Acciones de Remediacion",)
     pcts = stats["action_pcts"]
+    # Los 4 segmentos usan integramente la paleta de marca: magenta y
+    # navy como primarios, amarillo como acento puntual (tal y como
+    # indica el manual: "CTAs, alertas, detalles clave") y gris neutro.
     colors = [
-        C_RED,
-        C_RED2,
+        C_MAGENTA,
         C_NAVY,
+        C_YELLOW,
         C_MUTED,
     ]
+    # Texto oscuro sobre el segmento amarillo (regla de marca: nunca
+    # texto blanco/negro generico sobre un fondo de color, usar el tono
+    # mas oscuro de la misma familia -> aqui, navy).
+    text_colors = [C_WHITE, C_WHITE, C_NAVY, C_WHITE]
     labels = ["Bloqueado","Eliminado","Cuarentena","Desinfectado",]
     keys = ["blocked","deleted","quarantine","disinfected",]
     bx3 = 25
@@ -319,7 +257,7 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
     else:
         cx3 = bx3
         pdf.set_font("helvetica","B",8)
-        for key, color in zip(keys,colors):
+        for key, color, txt_color in zip(keys,colors,text_colors):
             pct_val = pcts.get(key, 0)
             seg_w = (pct_val / 100) * bw3
             pdf.set_fill_color(*color)
@@ -331,7 +269,7 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
             text_w = pdf.get_string_width(label_txt)
             if pct_val > 0 and text_w + 4 <= seg_w:
                 pdf.set_xy(cx3, by3)
-                pdf.set_text_color(*C_WHITE)
+                pdf.set_text_color(*txt_color)
                 pdf.cell(seg_w, bh3, label_txt, align="C")
 
             cx3 += seg_w
@@ -351,10 +289,14 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
     # ─────────────────────────────────────────────
     pdf.add_page()
 
-    pdf.set_text_color(*C_DARK)
+    pdf.set_font("helvetica","B",7.5)
+    pdf.set_text_color(*C_MAGENTA)
+    pdf.cell(0,5,"FUENTE \u00b7 BITDEFENDER GRAVITYZONE",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+    pdf.ln(1)
+    pdf.set_text_color(*C_NAVY)
     pdf.set_font("helvetica", "B", 18)
 
-    pdf.cell(0,15,
+    pdf.cell(0,12,
         "Elementos en Cuarentena",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
 
     quarantine = stats["quarantine_table"]
@@ -364,15 +306,19 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
 
     def _draw_quarantine_header():
         pdf.set_x(start_x)
-        pdf.set_fill_color(*C_RED)
-        pdf.set_text_color(*C_WHITE)
-        pdf.set_font("helvetica", "B", 10)
-        pdf.cell(15, 11, "#", border=0, fill=True, align="C")
-        pdf.cell(38, 11, "Endpoint", border=0, fill=True)
-        pdf.cell(48, 11, "Malware", border=0, fill=True)
-        pdf.cell(60, 11, "Ruta", border=0, fill=True)
-        pdf.cell(4,11,"",border=0,fill=True)
-        pdf.cell(25,11,"Fecha",border=0,fill=True,new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+        y0 = pdf.get_y()
+        pdf.set_text_color(*C_GRAY)
+        pdf.set_font("helvetica", "B", 8)
+        pdf.cell(15, 8, "#", border=0, align="C")
+        pdf.cell(38, 8, "ENDPOINT", border=0)
+        pdf.cell(48, 8, "MALWARE", border=0)
+        pdf.cell(60, 8, "RUTA", border=0)
+        pdf.cell(4,8,"",border=0)
+        pdf.cell(25,8,"FECHA",border=0,new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+        pdf.set_draw_color(*C_NAVY)
+        pdf.set_line_width(0.5)
+        pdf.line(start_x, y0 + 8, start_x + 190, y0 + 8)
+        pdf.ln(2)
 
     _draw_quarantine_header()
 
@@ -388,7 +334,7 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
         pdf.set_font("helvetica", "I", 9)
         pdf.set_xy(start_x, y0 + 3)
         pdf.cell(190,5,"No se han añadido elementos a la cuarentena.",align="C",)
-        pdf.set_draw_color(226, 232, 240)
+        pdf.set_draw_color(*C_BORDER)
         pdf.set_line_width(0.4)
         pdf.line(start_x, y0 + row_h, start_x + 190, y0 + row_h)
         pdf.ln(row_h)
@@ -404,8 +350,8 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
         line_h = 4.2
 
         def _flush_q_seps():
-            pdf.set_draw_color(0, 0, 0)
-            pdf.set_line_width(0.1)
+            pdf.set_draw_color(*C_BORDER)
+            pdf.set_line_width(0.2)
             for sy in sep_ys:
                 pdf.line(start_x, sy, start_x + 190, sy)
             sep_ys.clear()
@@ -425,7 +371,7 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
                 alt = False
 
             y0 = pdf.get_y()
-            pdf.set_fill_color((241, 245, 249) if alt else C_WHITE)
+            pdf.set_fill_color(*(C_LIGHT_ROW if alt else C_WHITE))
             pdf.rect(start_x, y0, 190, row_h, "F")
 
             pdf.set_text_color(*C_TEXT)
@@ -434,14 +380,17 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
             badge_cx = start_x + 7.5
             badge_cy = y0 + row_h / 2
             badge_r = 3.6
-            pdf.set_draw_color(203, 213, 225)
-            pdf.set_line_width(0.25)
-            pdf.ellipse(badge_cx - badge_r, badge_cy - badge_r, badge_r * 2, badge_r * 2, "D")
+            pdf.set_fill_color(*C_MAGENTA_TINT)
+            pdf.ellipse(badge_cx - badge_r, badge_cy - badge_r, badge_r * 2, badge_r * 2, "F")
+            pdf.set_text_color(*C_MAGENTA)
+            pdf.set_font("helvetica", "B", 8)
 
             pdf.set_xy(start_x, badge_cy - 2.3)
             pdf.cell(15, 4.6, str(pos), align="C")
 
             text_y = y0 + (row_h - 5) / 2
+            pdf.set_text_color(*C_TEXT)
+            pdf.set_font("helvetica", "", 8)
             pdf.set_xy(col_endpoint_x, text_y)
             pdf.cell(38, 5, str(row["Endpoint"])[:25])
             pdf.set_xy(col_malware_x, text_y)
@@ -465,6 +414,18 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
         _flush_q_seps()
         pdf.set_y(pdf.get_y())
 
+    pdf.set_draw_color(*C_BORDER)
+    pdf.set_line_width(0.2)
+    pdf.line(start_x, pdf.get_y(), start_x + 190, pdf.get_y())
+    pdf.ln(2.5)
+    pdf.set_font("helvetica", "", 8)
+    pdf.set_text_color(*C_GRAY)
+    pdf.cell(95, 5, f"Elementos en cuarentena: {len(quarantine)}")
+    pdf.set_font("helvetica", "B", 8)
+    pdf.set_text_color(*C_NAVY)
+    pdf.cell(95, 5, f"Periodo: {period_str}", align="R",
+        new_x=XPos.LMARGIN, new_y=YPos.NEXT,)
+
     pdf.set_text_color(*C_GRAY)
     pdf.set_font("helvetica", "I", 8)
 
@@ -487,29 +448,35 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
     if pdf.get_y() + required_h > pdf.page_break_trigger:
         pdf.add_page()
 
-    pdf.set_text_color(*C_DARK)
+    pdf.set_font("helvetica","B",7.5)
+    pdf.set_text_color(*C_MAGENTA)
+    pdf.cell(0,5,"FUENTE \u00b7 BITDEFENDER GRAVITYZONE",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+    pdf.ln(1)
+    pdf.set_text_color(*C_NAVY)
     pdf.set_font("helvetica","B",18)
-    pdf.cell(0,15,
-        "TOP 10 Endpoints Afectados",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+    pdf.cell(0,12,
+        "Top 10 Endpoints Afectados",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
 
     pdf.ln(3)
     start_x = pdf.get_x()
 
     def _draw_top10_header():
         pdf.set_x(start_x)
-        pdf.set_fill_color(*C_RED)
-        pdf.set_text_color(*C_WHITE)
-        pdf.set_font("helvetica","B",10)
-        pdf.cell(20,11,"#",border=0,fill=True,align="C")
-        pdf.cell(120,11,
-            "  Nombre del Endpoint",border=0,fill=True)
-        pdf.cell(50,11,
-            "Detecciones",border=0,fill=True,align="C",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+        y0 = pdf.get_y()
+        pdf.set_text_color(*C_GRAY)
+        pdf.set_font("helvetica","B",8)
+        pdf.cell(20,8,"#",border=0,align="C")
+        pdf.cell(120,8,
+            "  NOMBRE DEL ENDPOINT",border=0)
+        pdf.cell(50,8,
+            "DETECCIONES",border=0,align="C",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+        pdf.set_draw_color(*C_NAVY)
+        pdf.set_line_width(0.5)
+        pdf.line(start_x, y0 + 8, start_x + 190, y0 + 8)
+        pdf.ln(2)
 
     _draw_top10_header()
 
-    pdf.set_draw_color(226,232,240)
-    pdf.set_line_width(0.1)
     alt = False
     row_h = 11
 
@@ -524,17 +491,18 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
         pdf.set_font("helvetica", "I", 9)
         pdf.set_xy(start_x, y0 + 3)
         pdf.cell(190,5,"Sin detecciones en el periodo.",align="C",)
-        pdf.set_draw_color(226, 232, 240)
+        pdf.set_draw_color(*C_BORDER)
         pdf.set_line_width(0.4)
         pdf.line(start_x, y0 + row_h, start_x + 190, y0 + row_h)
         pdf.ln(row_h)
 
     else:
         sep_ys = []
+        total_detecciones = int(top10["Detecciones"].sum())
 
         def _flush_t10_seps():
-            pdf.set_draw_color(0, 0, 0)
-            pdf.set_line_width(0.1)
+            pdf.set_draw_color(*C_BORDER)
+            pdf.set_line_width(0.2)
             for sy in sep_ys:
                 pdf.line(start_x, sy, start_x + 190, sy)
             sep_ys.clear()
@@ -550,35 +518,28 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
 
             is_podium = pos <= 3
             y0 = pdf.get_y()
-            pdf.set_fill_color((253,232,238) if is_podium else ((241,245,249) if alt else C_WHITE))
+            pdf.set_fill_color(*(C_MAGENTA_TINT if is_podium else (C_LIGHT_ROW if alt else C_WHITE)))
             pdf.rect(start_x, y0, 190, row_h, "F")
 
             badge_cx = start_x + 10
             badge_cy = y0 + row_h / 2
             badge_r = 4.2 if is_podium else 3.6
 
-            if is_podium:
-                pdf.set_fill_color(*C_RED)
-                pdf.ellipse(badge_cx - badge_r, badge_cy - badge_r, badge_r * 2, badge_r * 2, "F")
-                pdf.set_text_color(*C_WHITE)
-                pdf.set_font("helvetica", "B", 9)
-            else:
-                pdf.set_draw_color(203, 213, 225)
-                pdf.set_line_width(0.25)
-                pdf.ellipse(badge_cx - badge_r, badge_cy - badge_r, badge_r * 2, badge_r * 2, "D")
-                pdf.set_text_color(*C_GRAY)
-                pdf.set_font("helvetica", "B", 8)
+            pdf.set_fill_color(*C_MAGENTA_TINT)
+            pdf.ellipse(badge_cx - badge_r, badge_cy - badge_r, badge_r * 2, badge_r * 2, "F")
+            pdf.set_text_color(*C_MAGENTA)
+            pdf.set_font("helvetica", "B", 9 if is_podium else 8)
 
             pdf.set_xy(start_x, badge_cy - 2.3)
             pdf.cell(20, 4.6, str(pos), align="C")
 
             pdf.set_xy(start_x + 20, y0 + (row_h - 5) / 2)
-            pdf.set_text_color(*C_RED if is_podium else C_TEXT)
+            pdf.set_text_color(*C_MAGENTA if is_podium else C_TEXT)
             pdf.set_font("helvetica", "B" if is_podium else "", 9)
             pdf.cell(120, 5, f"  {row['Endpoint']}")
 
             pdf.set_xy(start_x + 140, y0 + (row_h - 5) / 2)
-            pdf.set_text_color(*C_RED if is_podium else C_DARK)
+            pdf.set_text_color(*C_MAGENTA if is_podium else C_NAVY)
             pdf.set_font("helvetica", "B", 9)
             pdf.cell(50, 5, str(int(row["Detecciones"])), align="C")
 
@@ -588,6 +549,18 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
 
         _flush_t10_seps()
         pdf.set_y(pdf.get_y())
+        pdf.set_draw_color(*C_BORDER)
+        pdf.set_line_width(0.2)
+        pdf.line(start_x, pdf.get_y(), start_x + 190, pdf.get_y())
+        pdf.ln(2.5)
+        pdf.set_font("helvetica", "", 8)
+        pdf.set_text_color(*C_GRAY)
+        pdf.cell(95, 5, f"Endpoints en el ranking: {len(top10)}")
+        pdf.set_font("helvetica", "B", 8)
+        pdf.set_text_color(*C_NAVY)
+        pdf.cell(95, 5, f"Total detecciones: {total_detecciones}", align="R",
+            new_x=XPos.LMARGIN, new_y=YPos.NEXT,)
+        pdf.ln(2)
 
     # ─────────────────────────────────────────────
     # SECCION: INCIDENCIAS ZABBIX (solo si la empresa tiene Zabbix)
@@ -613,34 +586,37 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
         if pdf.get_y() + required_h_z > pdf.page_break_trigger:
             pdf.add_page()
 
-        pdf.set_text_color(*C_DARK)
+        pdf.set_font("helvetica","B",7.5)
+        pdf.set_text_color(*C_MAGENTA)
+        pdf.cell(0,5,"FUENTE \u00b7 ZABBIX MONITORING",new_x=XPos.LMARGIN,new_y=YPos.NEXT,)
+        pdf.ln(1)
+        pdf.set_text_color(*C_NAVY)
         pdf.set_font("helvetica", "B", 18)
-        pdf.cell(0, 15,
-            "Incidencias Zabbix (En Tratamiento)", new_x=XPos.LMARGIN, new_y=YPos.NEXT,)
+        pdf.cell(0, 12,
+            "Incidencias en Resolucion (Zabbix)", new_x=XPos.LMARGIN, new_y=YPos.NEXT,)
 
         pdf.ln(3)
         start_x = pdf.get_x()
 
-        C_GREEN = (22, 163, 74)
-
         def _draw_zabbix_header():
             pdf.set_x(start_x)
-            pdf.set_fill_color(*C_RED)
-            pdf.set_text_color(*C_WHITE)
-            pdf.set_font("helvetica", "B", 10)
-            pdf.cell(12, 11, "#", border=0, fill=True, align="C")
-            pdf.cell(33, 11, "Host", border=0, fill=True)
-            pdf.cell(53, 11, "Problema", border=0, fill=True)
-            pdf.cell(16, 11, "Ocurr.", border=0, fill=True, align="C")
-            pdf.cell(23, 11, "Severidad", border=0, fill=True, align="C")
-            pdf.cell(23, 11, "Estado", border=0, fill=True, align="C")
-            pdf.cell(30, 11, "Última detección", border=0, fill=True, align="C",
+            y0 = pdf.get_y()
+            pdf.set_text_color(*C_GRAY)
+            pdf.set_font("helvetica", "B", 8)
+            pdf.cell(12, 8, "#", border=0, align="C")
+            pdf.cell(33, 8, "HOST", border=0)
+            pdf.cell(53, 8, "PROBLEMA", border=0)
+            pdf.cell(16, 8, "OCURR.", border=0, align="C")
+            pdf.cell(23, 8, "SEVERIDAD", border=0, align="C")
+            pdf.cell(23, 8, "ESTADO", border=0, align="C")
+            pdf.cell(30, 8, "ULTIMA DETECCION", border=0, align="C",
                 new_x=XPos.LMARGIN, new_y=YPos.NEXT,)
+            pdf.set_draw_color(*C_NAVY)
+            pdf.set_line_width(0.5)
+            pdf.line(start_x, y0 + 8, start_x + 190, y0 + 8)
+            pdf.ln(2)
 
         _draw_zabbix_header()
-
-        pdf.set_draw_color(226, 232, 240)
-        pdf.set_line_width(0.1)
 
         if not zabbix_problems:
             row_h_e = 11
@@ -651,7 +627,7 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
             pdf.set_font("helvetica", "I", 9)
             pdf.set_xy(start_x, y0 + 3)
             pdf.cell(190, 5, "Sin incidencias suprimidas/reconocidas en el periodo.", align="C",)
-            pdf.set_draw_color(226, 232, 240)
+            pdf.set_draw_color(*C_BORDER)
             pdf.set_line_width(0.4)
             pdf.line(start_x, y0 + row_h_e, start_x + 190, y0 + row_h_e)
             pdf.ln(row_h_e)
@@ -666,8 +642,8 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
             col_fecha_x = col_estado_x + 23
 
             def _flush_z_seps():
-                pdf.set_draw_color(0, 0, 0)
-                pdf.set_line_width(0.1)
+                pdf.set_draw_color(*C_BORDER)
+                pdf.set_line_width(0.2)
                 for sy in sep_ys:
                     pdf.line(start_x, sy, start_x + 190, sy)
                 sep_ys.clear()
@@ -684,18 +660,17 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
                     alt = False
 
                 y0 = pdf.get_y()
-                pdf.set_fill_color((241, 245, 249) if alt else C_WHITE)
+                pdf.set_fill_color(*(C_LIGHT_ROW if alt else C_WHITE))
                 pdf.rect(start_x, y0, 190, row_h_z, "F")
 
                 # Badge redondo con el numero de fila, igual que en Cuarentena/Top10
                 badge_cx = start_x + 6
                 badge_cy = y0 + row_h_z / 2
                 badge_r = 3.4
-                pdf.set_draw_color(203, 213, 225)
-                pdf.set_line_width(0.25)
-                pdf.ellipse(badge_cx - badge_r, badge_cy - badge_r, badge_r * 2, badge_r * 2, "D")
+                pdf.set_fill_color(*C_MAGENTA_TINT)
+                pdf.ellipse(badge_cx - badge_r, badge_cy - badge_r, badge_r * 2, badge_r * 2, "F")
 
-                pdf.set_text_color(*C_GRAY)
+                pdf.set_text_color(*C_MAGENTA)
                 pdf.set_font("helvetica", "B", 8)
                 pdf.set_xy(start_x, badge_cy - 2.3)
                 pdf.cell(12, 4.6, str(pos), align="C")
@@ -741,6 +716,18 @@ def generate_pdf(company,stats,period_label,period_start=None,has_zabbix=False,z
 
             _flush_z_seps()
             pdf.set_y(pdf.get_y())
+            pdf.set_draw_color(*C_BORDER)
+            pdf.set_line_width(0.2)
+            pdf.line(start_x, pdf.get_y(), start_x + 190, pdf.get_y())
+            pdf.ln(2.5)
+            total_ocurr_z = sum(p.get("occurrences", 0) for p in zabbix_problems)
+            pdf.set_font("helvetica", "", 8)
+            pdf.set_text_color(*C_GRAY)
+            pdf.cell(95, 5, f"Incidencias con seguimiento activo: {len(zabbix_problems)}")
+            pdf.set_font("helvetica", "B", 8)
+            pdf.set_text_color(*C_NAVY)
+            pdf.cell(95, 5, f"Total ocurrencias: {total_ocurr_z}", align="R",
+                new_x=XPos.LMARGIN, new_y=YPos.NEXT,)
 
     if period_start:
         mmaa = period_start.strftime("%m%y")

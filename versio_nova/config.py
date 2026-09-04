@@ -31,6 +31,9 @@ EXCLUDED_COMPANIES = ["INCYBER"]
 logo_portada = os.path.join(ASSETS_PATH, "logo_portada.png")
 logo_encabezado = os.path.join(ASSETS_PATH, "logo_encabezado.png")
 icon_portada = os.path.join(ASSETS_PATH, "icon_portada.png")
+# Pictograma del laberinto en blanco, usado como marca de agua sutil
+# sobre el fondo azul marino de la portada.
+pictogram_watermark = os.path.join(ASSETS_PATH, "pictogram_white.png")
 
 # Iconos para la tabla de Inventario (assets/icons/)
 ICONS_PATH = os.path.join(ASSETS_PATH, "icons")
